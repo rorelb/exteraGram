@@ -1,0 +1,121 @@
+name: Build exteraGram
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug:
+    name: Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk/ndk || true
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK components
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-37" "build-tools;36.0.0" "ndk;29.0.14206865"
+
+      - name: Create API_KEYS
+        env:
+          API_KEYS_CONTENT: ${{ secrets.API_KEYS }}
+        run: |
+          if [ -n "$API_KEYS_CONTENT" ]; then
+            printf '%s\n' "$API_KEYS_CONTENT" > API_KEYS
+          else
+            echo "::warning::API_KEYS secret is not set. Using placeholder values: the app compiles but cannot log in to Telegram."
+            {
+              echo "APP_ID = 123456"
+              echo "APP_HASH = 0123456789abcdef0123456789abcdef"
+              echo "MAPS_V2_API = placeholder"
+            } > API_KEYS
+          fi
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj:assembleFullBetaDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exteragram-debug
+          path: "**/build/outputs/apk/**/*.apk"
+          if-no-files-found: error
+
+  release:
+    name: Signed release APK
+    # Only runs when a signing keystore is configured and the build is triggered manually or by a tag.
+    if: >-
+      (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')) &&
+      secrets.KEYSTORE_B64 != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk/ndk || true
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK components
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-37" "build-tools;36.0.0" "ndk;29.0.14206865"
+
+      - name: Create API_KEYS (must include SIGNING_KEY_* values)
+        env:
+          API_KEYS_CONTENT: ${{ secrets.API_KEYS }}
+        run: printf '%s\n' "$API_KEYS_CONTENT" > API_KEYS
+
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          # build.gradle expects the keystore at TMessagesProj/config/exteraGram.jks (gitignored in the repo)
+          echo "$KEYSTORE_B64" | base64 -d > TMessagesProj/config/exteraGram.jks
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build signed release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj:assembleFullAfatRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exteragram-release
+          path: "**/build/outputs/apk/**/*.apk"
+          if-no-files-found: error
+          
