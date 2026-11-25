@@ -62,8 +62,8 @@ public class RemoteUtils {
             PREFERENCES_PREVIEW_STYLE = "preferences_preview_style",
             SUPPORTERS_CHANNEL_LINK = "supporters_channel_link";
 
-    private static final long CHANNEL_ID = 2227431611L;
-    private static final String CHANNEL_USERNAME = "XS6GEcz5ZXMu82UvXQc";
+    private static final long CHANNEL_ID = 5632525135L;
+    private static final String CHANNEL_USERNAME = "Gehudhdhsjiakwk";
     private static final String PREFS_NAME = "exteraremoteconfig";
     private static final int SEARCH_MAX_ATTEMPTS = 3;
     private static final String LAST_FETCH_ATTEMPT_KEY = "__last_fetch_attempt_time";
